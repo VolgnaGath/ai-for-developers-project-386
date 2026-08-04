@@ -1,0 +1,477 @@
+openapi: 3.1.0
+info:
+  title: Call Calendar
+  description: |-
+    Календарь звонков — аналог Cal.com (MVP).
+
+    Скоуп v1: без авторизации, без личных кабинетов, без внешних интеграций.
+    Владелец календаря — один заранее заданный профиль (админская часть).
+    Гость бронирует слоты без аккаунта и без входа.
+
+    Доступность (рабочие часы, таймзона, шаг сетки, окно бронирования) —
+    фиксированный конфиг приложения, а не ресурс API (вариант A).
+    Наружу из конфига выставляется только `GET /config` для рендера календаря.
+  version: 0.0.0
+tags: []
+paths:
+  /admin/bookings:
+    get:
+      operationId: listBookings
+      description: Страница предстоящих встреч — общий список бронирований всех типов.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          explode: false
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Booking'
+  /admin/event-types:
+    get:
+      operationId: listEventTypes
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventType'
+    post:
+      operationId: createEventType
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypeInput'
+  /admin/event-types/{id}:
+    get:
+      operationId: getEventType
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFound'
+    put:
+      operationId: updateEventType
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFound'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTypeInput'
+    delete:
+      operationId: deleteEventType
+      description: |-
+        Удалить тип события.
+        409 — у типа события есть брони, удаление заблокировано.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFound'
+        '409':
+          description: Нельзя удалить тип события, у которого есть существующие брони.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTypeHasBookings'
+  /bookings:
+    post:
+      operationId: createBooking
+      description: |-
+        Создать бронь на выбранный слот.
+
+        Сервер не доверяет клиенту и заново проверяет свободность `start`:
+        409 — слот уже занят, 422 — `start` вне сетки/окна, 404 — нет типа события.
+        При успехе `end` и `status: confirmed` проставляет сервер.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFound'
+        '409':
+          description: Слот уже занят к моменту брони (в т.ч. гонка двух гостей за один слот).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotUnavailable'
+        '422':
+          description: '`start` не бьётся с сеткой слотов или лежит вне окна бронирования.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidSlot'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingInput'
+  /config:
+    get:
+      operationId: getConfig
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicConfig'
+  /event-types:
+    get:
+      operationId: browseEventTypes
+      description: 'Витрина видов брони: название, описание, длительность.'
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventType'
+  /event-types/{id}:
+    get:
+      operationId: viewEventType
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventType'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFound'
+  /event-types/{id}/slots:
+    get:
+      operationId: listSlots
+      description: |-
+        Свободные слоты для типа события в диапазоне дат.
+
+        `from` и `to` — календарные даты, трактуются в таймзоне конфига (`PublicConfig.timezone`).
+        Сервер пересекает [from, to] с окном бронирования (14 дней от «сейчас»)
+        и рабочими часами из конфига, нарезает по длительности типа события
+        с шагом `slotStepMinutes` и вычитает пересечения с непогашенными бронями.
+        Слоты не пересекаются, смежные допустимы: [start, end).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          explode: false
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Slot'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFound'
+components:
+  schemas:
+    Booking:
+      type: object
+      required:
+        - id
+        - eventTypeId
+        - guestName
+        - start
+        - end
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+        eventTypeId:
+          type: string
+        guestName:
+          type: string
+          minLength: 1
+        guestEmail:
+          type: string
+          format: email
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+          description: = `start` + `durationMinutes` типа события. Проставляет сервер.
+        status:
+          $ref: '#/components/schemas/BookingStatus'
+        createdAt:
+          type: string
+          format: date-time
+      description: Бронирование гостя.
+    BookingInput:
+      type: object
+      required:
+        - eventTypeId
+        - start
+        - guestName
+      properties:
+        eventTypeId:
+          type: string
+        start:
+          type: string
+          format: date-time
+          description: Начало выбранного слота. Должно совпасть с одним из свободных слотов.
+        guestName:
+          type: string
+          minLength: 1
+        guestEmail:
+          type: string
+          format: email
+      description: Тело запроса на бронирование.
+    BookingStatus:
+      type: string
+      enum:
+        - confirmed
+      description: 'Статус брони. В v1 — только подтверждённые: отмены/переноса нет.'
+    EventType:
+      type: object
+      required:
+        - id
+        - title
+        - durationMinutes
+      properties:
+        id:
+          type: string
+          description: Идентификатор. Генерируется сервером.
+        title:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: number
+          enum:
+            - 15
+            - 30
+          description: Длительность встречи. В v1 — только два режима.
+      description: Тип события, которым управляет владелец.
+    EventTypeHasBookings:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - event_type_has_bookings
+      description: Нельзя удалить тип события, у которого есть существующие брони.
+    EventTypeInput:
+      type: object
+      required:
+        - title
+        - durationMinutes
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: number
+          enum:
+            - 15
+            - 30
+      description: |-
+        Тело запроса на создание/изменение типа события.
+        Без `id` — его проставляет сервер; пользователь задаёт только нейминг.
+    InvalidSlot:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - invalid_slot
+      description: '`start` не бьётся с сеткой слотов или лежит вне окна бронирования.'
+    NotFound:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - not_found
+    PublicConfig:
+      type: object
+      required:
+        - timezone
+        - bookingWindowDays
+        - slotStepMinutes
+        - workingHours
+      properties:
+        timezone:
+          type: string
+          description: Например, "Europe/Moscow".
+        bookingWindowDays:
+          type: integer
+          format: int32
+          description: Горизонт бронирования, в v1 — 14.
+        slotStepMinutes:
+          type: integer
+          format: int32
+          description: Шаг сетки свободных слотов в минутах, в v1 — 15.
+        workingHours:
+          $ref: '#/components/schemas/WorkingHours'
+      description: Публичная часть конфига доступности — нужна фронту для рендера календаря.
+    Slot:
+      type: object
+      required:
+        - start
+        - end
+      properties:
+        start:
+          type: string
+          format: date-time
+          description: 'Начало слота. Слоты не пересекаются, смежные допустимы: [start, end).'
+        end:
+          type: string
+          format: date-time
+      description: Вычисляемый свободный слот (не хранится, только читается гостем).
+    SlotUnavailable:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - slot_unavailable
+      description: Слот уже занят к моменту брони (в т.ч. гонка двух гостей за один слот).
+    WorkingHours:
+      type: object
+      required:
+        - days
+        - start
+        - end
+      properties:
+        days:
+          type: array
+          items:
+            type: integer
+            format: int32
+          description: Дни недели приёма (1 = Пн … 7 = Вс).
+        start:
+          type: string
+          description: Начало рабочего окна в таймзоне конфига, например "09:00".
+        end:
+          type: string
+          description: Конец рабочего окна в таймзоне конфига, например "18:00".
+      description: Рабочие часы владельца — фиксированная часть конфига доступности.
