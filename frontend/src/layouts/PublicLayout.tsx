@@ -1,5 +1,5 @@
 import { Button, Container } from '@mantine/core';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Link } from 'react-router-dom';
 import { Brand } from '../shared/ui/Brand';
 import styles from './PublicLayout.module.css';
 
@@ -9,8 +9,8 @@ export default function PublicLayout() {
       <header className={styles.header}>
         <Container size={1120} className={styles.headerInner}>
           <Brand />
-          <Button component="a" href="/book" variant="light" size="sm">
-            Выбрать время
+          <Button component={Link} to="/book" variant="light" size="sm">
+            Забронировать звонок
           </Button>
         </Container>
       </header>

@@ -14,7 +14,7 @@ export default function LandingPage() {
         </Text>
         <Group mt="xl">
           <Button component={Link} to="/book" size="lg">
-            Выбрать время
+            Забронировать звонок
           </Button>
         </Group>
       </Container>
