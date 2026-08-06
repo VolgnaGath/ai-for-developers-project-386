@@ -29,3 +29,7 @@ export function deleteEventType(id: string): Promise<void> {
 export function browseEventTypes(): Promise<EventType[]> {
   return unwrap(() => apiClient.GET('/event-types'));
 }
+
+export function viewEventType(id: string): Promise<EventType> {
+  return unwrap(() => apiClient.GET('/event-types/{id}', { params: { path: { id } } }));
+}
