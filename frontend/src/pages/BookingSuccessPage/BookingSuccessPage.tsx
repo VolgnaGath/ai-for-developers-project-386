@@ -1,4 +1,5 @@
-import { Button, Card, Container, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { Alert, Button, Card, Container, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { useDocumentTitle } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { getConfig } from '../../shared/api/bookings';
@@ -7,6 +8,7 @@ import { formatDateTime, formatTime } from '../../shared/date/timezone';
 import styles from './BookingSuccessPage.module.css';
 
 export default function BookingSuccessPage() {
+  useDocumentTitle('Бронь подтверждена — Call Calendar');
   const location = useLocation();
   const booking = (location.state as { booking?: Booking } | null)?.booking;
   const configQuery = useQuery({ queryKey: ['config'], queryFn: getConfig });
@@ -43,13 +45,28 @@ export default function BookingSuccessPage() {
           Встреча запланирована. Мы сохранили ваши данные.
         </Text>
 
+        {configQuery.isError ? (
+          <Alert color="red" title="Не удалось загрузить время встречи" variant="light" mb="lg">
+            <Text mb="sm">
+              Мы не смогли отобразить время в таймзоне владельца. Попробуйте ещё раз.
+            </Text>
+            <Button size="xs" onClick={() => configQuery.refetch()}>
+              Повторить
+            </Button>
+          </Alert>
+        ) : null}
+
         <Stack gap="xs" className={styles.details}>
           {configQuery.isPending ? (
             <Skeleton height={22} width="50%" />
           ) : (
             <Detail
               label="Дата и время"
-              value={`${formatDateTime(booking.start, timezone)}–${formatTime(booking.end, timezone)}`}
+              value={
+                configQuery.isError
+                  ? booking.start
+                  : `${formatDateTime(booking.start, timezone)}–${formatTime(booking.end, timezone)}`
+              }
             />
           )}
           <Detail label="Имя" value={booking.guestName} />
@@ -68,7 +85,7 @@ export default function BookingSuccessPage() {
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <Group justify="space-between" gap="lg" wrap="nowrap">
+    <Group justify="space-between" gap="lg" wrap="wrap">
       <Text size="sm" c="dimmed">
         {label}
       </Text>

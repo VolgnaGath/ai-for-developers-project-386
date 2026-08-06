@@ -13,6 +13,7 @@ import {
   Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useDocumentTitle } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { getConfig, listSlots, createBooking } from '../../shared/api/bookings';
@@ -40,6 +41,8 @@ export default function BookingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  useDocumentTitle('Бронирование звонка — Call Calendar');
 
   const configQuery = useQuery({ queryKey: ['config'], queryFn: getConfig });
   const config = configQuery.data;
@@ -106,6 +109,8 @@ export default function BookingPage() {
     () => (selectedDate ? (slotsByDay.get(selectedDate) ?? []) : []),
     [selectedDate, slotsByDay],
   );
+
+  const slotsLoading = !eventType || !config || !gridRange || slotsQuery.isPending;
 
   const form = useForm<BookingFormValues>({
     initialValues: { guestName: '', guestEmail: '' },
@@ -295,7 +300,7 @@ export default function BookingPage() {
               ) : null}
 
               {slotError ? (
-                <Alert color="red" variant="light" mb="md">
+                <Alert color="red" variant="light" mb="md" role="alert">
                   {slotError}
                 </Alert>
               ) : null}
@@ -314,7 +319,7 @@ export default function BookingPage() {
                 <SlotList
                   slots={daySlots}
                   timezone={config?.timezone ?? 'UTC'}
-                  isPending={slotsQuery.isPending}
+                  isPending={slotsLoading}
                   hasError={slotsQuery.isError}
                   onSelectSlot={handleSelectSlot}
                   onRetry={() => slotsQuery.refetch()}
