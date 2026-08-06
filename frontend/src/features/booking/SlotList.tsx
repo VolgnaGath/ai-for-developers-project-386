@@ -21,7 +21,7 @@ export function SlotList({
   onRetry,
 }: SlotListProps) {
   return (
-    <div aria-live="polite" className={styles.root}>
+    <div aria-live="polite" aria-busy={isPending} className={styles.root}>
       {isPending ? (
         <SimpleGrid cols={2} spacing="sm">
           {Array.from({ length: 6 }, (_, i) => (

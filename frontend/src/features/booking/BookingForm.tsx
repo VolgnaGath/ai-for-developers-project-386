@@ -47,7 +47,7 @@ export function BookingForm({
         </div>
 
         {submitError ? (
-          <Alert color="red" variant="light">
+          <Alert color="red" variant="light" role="alert">
             {submitError}
           </Alert>
         ) : null}

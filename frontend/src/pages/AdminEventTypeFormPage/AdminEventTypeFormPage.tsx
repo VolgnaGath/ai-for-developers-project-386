@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Anchor, Button, Card, Container, Skeleton, Stack, Text, Title } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useDocumentTitle } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -18,6 +19,10 @@ export default function AdminEventTypeFormPage() {
   const initializedRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+
+  useDocumentTitle(
+    isEdit ? 'Редактирование типа события — Call Calendar' : 'Новый тип события — Call Calendar',
+  );
 
   const eventTypeQuery = useQuery({
     queryKey: ['admin-event-type', eventTypeId],

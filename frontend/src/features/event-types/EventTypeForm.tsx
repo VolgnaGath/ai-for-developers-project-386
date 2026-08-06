@@ -35,7 +35,7 @@ export function EventTypeForm({
     <form onSubmit={form.onSubmit(onSubmit)} noValidate>
       <Stack gap="md">
         {submitError ? (
-          <Alert color="red" variant="light">
+          <Alert color="red" variant="light" role="alert">
             {submitError}
           </Alert>
         ) : null}

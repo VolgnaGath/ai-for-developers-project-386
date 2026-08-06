@@ -41,7 +41,7 @@ export function CalendarPicker({
   };
 
   return (
-    <div>
+    <div role="group" aria-label="Календарь бронирования">
       <Group justify="space-between" mb="xs" gap={4}>
         <UnstyledButton
           className={styles.navButton}

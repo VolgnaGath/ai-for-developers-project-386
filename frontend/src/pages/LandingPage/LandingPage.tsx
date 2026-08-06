@@ -1,8 +1,10 @@
 import { Button, Container, Group, Text, Title } from '@mantine/core';
+import { useDocumentTitle } from '@mantine/hooks';
 import { Link } from 'react-router-dom';
 import styles from './LandingPage.module.css';
 
 export default function LandingPage() {
+  useDocumentTitle('Call Calendar — бронирование звонков');
   return (
     <div className={styles.root}>
       <Container size={1120} className={styles.inner}>

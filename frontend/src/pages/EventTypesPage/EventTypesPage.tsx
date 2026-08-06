@@ -8,12 +8,14 @@ import {
   Title,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
+import { useDocumentTitle } from '@mantine/hooks';
 import { browseEventTypes } from '../../shared/api/eventTypes';
 import { isApiError, NetworkError } from '../../shared/api/errors';
 import { EventTypeCard } from './EventTypeCard';
 import styles from './EventTypesPage.module.css';
 
 export default function EventTypesPage() {
+  useDocumentTitle('Выбор типа события — Call Calendar');
   const query = useQuery({
     queryKey: ['public-event-types'],
     queryFn: browseEventTypes,
