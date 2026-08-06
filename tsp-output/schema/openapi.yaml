@@ -245,6 +245,10 @@ paths:
         и рабочими часами из конфига, нарезает по длительности типа события
         с шагом `slotStepMinutes` и вычитает пересечения с непогашенными бронями.
         Слоты не пересекаются, смежные допустимы: [start, end).
+
+        Пример ответа ниже нужен мок-серверу Prism. Даты статичны и со временем
+        выходят из окна бронирования — это ограничение Prism; stateful и негативные
+        сценарии покрывает MSW.
       parameters:
         - name: id
           in: path
@@ -274,6 +278,17 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Slot'
+              example:
+                - start: '2026-08-10T09:00:00+03:00'
+                  end: '2026-08-10T09:15:00+03:00'
+                - start: '2026-08-10T09:15:00+03:00'
+                  end: '2026-08-10T09:30:00+03:00'
+                - start: '2026-08-10T10:00:00+03:00'
+                  end: '2026-08-10T10:15:00+03:00'
+                - start: '2026-08-11T09:00:00+03:00'
+                  end: '2026-08-11T09:15:00+03:00'
+                - start: '2026-08-11T11:00:00+03:00'
+                  end: '2026-08-11T11:15:00+03:00'
         '404':
           description: The server cannot find the requested resource.
           content:
@@ -316,6 +331,15 @@ components:
           type: string
           format: date-time
       description: Бронирование гостя.
+      examples:
+        - id: bk_001
+          eventTypeId: evt_consultation
+          guestName: Анна Иванова
+          guestEmail: anna@example.com
+          start: '2026-08-10T09:00:00+03:00'
+          end: '2026-08-10T09:30:00+03:00'
+          status: confirmed
+          createdAt: '2026-08-05T10:00:00Z'
     BookingInput:
       type: object
       required:
@@ -362,6 +386,11 @@ components:
             - 30
           description: Длительность встречи. В v1 — только два режима.
       description: Тип события, которым управляет владелец.
+      examples:
+        - id: evt_consultation
+          title: Консультация
+          description: Короткий созвон, чтобы обсудить ваш вопрос.
+          durationMinutes: 30
     EventTypeHasBookings:
       type: object
       required:
@@ -372,6 +401,9 @@ components:
           enum:
             - event_type_has_bookings
       description: Нельзя удалить тип события, у которого есть существующие брони.
+      examples:
+        - statusCode: 409
+          code: event_type_has_bookings
     EventTypeInput:
       type: object
       required:
@@ -400,6 +432,9 @@ components:
           enum:
             - invalid_slot
       description: '`start` не бьётся с сеткой слотов или лежит вне окна бронирования.'
+      examples:
+        - statusCode: 422
+          code: invalid_slot
     NotFound:
       type: object
       required:
@@ -409,6 +444,9 @@ components:
           type: string
           enum:
             - not_found
+      examples:
+        - statusCode: 404
+          code: not_found
     PublicConfig:
       type: object
       required:
@@ -431,6 +469,19 @@ components:
         workingHours:
           $ref: '#/components/schemas/WorkingHours'
       description: Публичная часть конфига доступности — нужна фронту для рендера календаря.
+      examples:
+        - timezone: Europe/Moscow
+          bookingWindowDays: 14
+          slotStepMinutes: 15
+          workingHours:
+            days:
+              - 1
+              - 2
+              - 3
+              - 4
+              - 5
+            start: '09:00'
+            end: '18:00'
     Slot:
       type: object
       required:
@@ -445,6 +496,9 @@ components:
           type: string
           format: date-time
       description: Вычисляемый свободный слот (не хранится, только читается гостем).
+      examples:
+        - start: '2026-08-10T09:00:00+03:00'
+          end: '2026-08-10T09:15:00+03:00'
     SlotUnavailable:
       type: object
       required:
@@ -455,6 +509,9 @@ components:
           enum:
             - slot_unavailable
       description: Слот уже занят к моменту брони (в т.ч. гонка двух гостей за один слот).
+      examples:
+        - statusCode: 409
+          code: slot_unavailable
     WorkingHours:
       type: object
       required:

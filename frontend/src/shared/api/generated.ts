@@ -144,6 +144,10 @@ export interface paths {
          *     и рабочими часами из конфига, нарезает по длительности типа события
          *     с шагом `slotStepMinutes` и вычитает пересечения с непогашенными бронями.
          *     Слоты не пересекаются, смежные допустимы: [start, end).
+         *
+         *     Пример ответа ниже нужен мок-серверу Prism. Даты статичны и со временем
+         *     выходят из окна бронирования — это ограничение Prism; stateful и негативные
+         *     сценарии покрывает MSW.
          */
         get: operations["listSlots"];
         put?: never;
@@ -158,7 +162,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description Бронирование гостя. */
+        /**
+         * @description Бронирование гостя.
+         * @example {
+         *       "id": "bk_001",
+         *       "eventTypeId": "evt_consultation",
+         *       "guestName": "Анна Иванова",
+         *       "guestEmail": "anna@example.com",
+         *       "start": "2026-08-10T09:00:00+03:00",
+         *       "end": "2026-08-10T09:30:00+03:00",
+         *       "status": "confirmed",
+         *       "createdAt": "2026-08-05T10:00:00Z"
+         *     }
+         */
         Booking: {
             id: string;
             eventTypeId: string;
@@ -193,7 +209,15 @@ export interface components {
          * @enum {string}
          */
         BookingStatus: "confirmed";
-        /** @description Тип события, которым управляет владелец. */
+        /**
+         * @description Тип события, которым управляет владелец.
+         * @example {
+         *       "id": "evt_consultation",
+         *       "title": "Консультация",
+         *       "description": "Короткий созвон, чтобы обсудить ваш вопрос.",
+         *       "durationMinutes": 30
+         *     }
+         */
         EventType: {
             /** @description Идентификатор. Генерируется сервером. */
             id: string;
@@ -205,7 +229,13 @@ export interface components {
              */
             durationMinutes: 15 | 30;
         };
-        /** @description Нельзя удалить тип события, у которого есть существующие брони. */
+        /**
+         * @description Нельзя удалить тип события, у которого есть существующие брони.
+         * @example {
+         *       "statusCode": 409,
+         *       "code": "event_type_has_bookings"
+         *     }
+         */
         EventTypeHasBookings: {
             /** @enum {string} */
             code: "event_type_has_bookings";
@@ -220,16 +250,46 @@ export interface components {
             /** @enum {number} */
             durationMinutes: 15 | 30;
         };
-        /** @description `start` не бьётся с сеткой слотов или лежит вне окна бронирования. */
+        /**
+         * @description `start` не бьётся с сеткой слотов или лежит вне окна бронирования.
+         * @example {
+         *       "statusCode": 422,
+         *       "code": "invalid_slot"
+         *     }
+         */
         InvalidSlot: {
             /** @enum {string} */
             code: "invalid_slot";
         };
+        /**
+         * @example {
+         *       "statusCode": 404,
+         *       "code": "not_found"
+         *     }
+         */
         NotFound: {
             /** @enum {string} */
             code: "not_found";
         };
-        /** @description Публичная часть конфига доступности — нужна фронту для рендера календаря. */
+        /**
+         * @description Публичная часть конфига доступности — нужна фронту для рендера календаря.
+         * @example {
+         *       "timezone": "Europe/Moscow",
+         *       "bookingWindowDays": 14,
+         *       "slotStepMinutes": 15,
+         *       "workingHours": {
+         *         "days": [
+         *           1,
+         *           2,
+         *           3,
+         *           4,
+         *           5
+         *         ],
+         *         "start": "09:00",
+         *         "end": "18:00"
+         *       }
+         *     }
+         */
         PublicConfig: {
             /** @description Например, "Europe/Moscow". */
             timezone: string;
@@ -245,7 +305,13 @@ export interface components {
             slotStepMinutes: number;
             workingHours: components["schemas"]["WorkingHours"];
         };
-        /** @description Вычисляемый свободный слот (не хранится, только читается гостем). */
+        /**
+         * @description Вычисляемый свободный слот (не хранится, только читается гостем).
+         * @example {
+         *       "start": "2026-08-10T09:00:00+03:00",
+         *       "end": "2026-08-10T09:15:00+03:00"
+         *     }
+         */
         Slot: {
             /**
              * Format: date-time
@@ -255,7 +321,13 @@ export interface components {
             /** Format: date-time */
             end: string;
         };
-        /** @description Слот уже занят к моменту брони (в т.ч. гонка двух гостей за один слот). */
+        /**
+         * @description Слот уже занят к моменту брони (в т.ч. гонка двух гостей за один слот).
+         * @example {
+         *       "statusCode": 409,
+         *       "code": "slot_unavailable"
+         *     }
+         */
         SlotUnavailable: {
             /** @enum {string} */
             code: "slot_unavailable";
@@ -591,6 +663,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "start": "2026-08-10T09:00:00+03:00",
+                     *         "end": "2026-08-10T09:15:00+03:00"
+                     *       },
+                     *       {
+                     *         "start": "2026-08-10T09:15:00+03:00",
+                     *         "end": "2026-08-10T09:30:00+03:00"
+                     *       },
+                     *       {
+                     *         "start": "2026-08-10T10:00:00+03:00",
+                     *         "end": "2026-08-10T10:15:00+03:00"
+                     *       },
+                     *       {
+                     *         "start": "2026-08-11T09:00:00+03:00",
+                     *         "end": "2026-08-11T09:15:00+03:00"
+                     *       },
+                     *       {
+                     *         "start": "2026-08-11T11:00:00+03:00",
+                     *         "end": "2026-08-11T11:15:00+03:00"
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["Slot"][];
                 };
             };

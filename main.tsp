@@ -19,6 +19,14 @@ namespace CallCalendar;
 // ─────────────────────────────── Модели ───────────────────────────────
 
 /** Тип события, которым управляет владелец. */
+@example(
+  #{
+    id: "evt_consultation",
+    title: "Консультация",
+    description: "Короткий созвон, чтобы обсудить ваш вопрос.",
+    durationMinutes: 30,
+  },
+)
 model EventType {
   /** Идентификатор. Генерируется сервером. */
   id: string;
@@ -46,6 +54,18 @@ enum BookingStatus {
 }
 
 /** Бронирование гостя. */
+@example(
+  #{
+    id: "bk_001",
+    eventTypeId: "evt_consultation",
+    guestName: "Анна Иванова",
+    guestEmail: "anna@example.com",
+    start: utcDateTime.fromISO("2026-08-10T09:00:00+03:00"),
+    end: utcDateTime.fromISO("2026-08-10T09:30:00+03:00"),
+    status: BookingStatus.confirmed,
+    createdAt: utcDateTime.fromISO("2026-08-05T10:00:00Z"),
+  },
+)
 model Booking {
   id: string;
   eventTypeId: string;
@@ -80,6 +100,12 @@ model BookingInput {
 }
 
 /** Вычисляемый свободный слот (не хранится, только читается гостем). */
+@example(
+  #{
+    start: utcDateTime.fromISO("2026-08-10T09:00:00+03:00"),
+    end: utcDateTime.fromISO("2026-08-10T09:15:00+03:00"),
+  },
+)
 model Slot {
   /** Начало слота. Слоты не пересекаются, смежные допустимы: [start, end). */
   start: utcDateTime;
@@ -100,6 +126,18 @@ model WorkingHours {
 }
 
 /** Публичная часть конфига доступности — нужна фронту для рендера календаря. */
+@example(
+  #{
+    timezone: "Europe/Moscow",
+    bookingWindowDays: 14,
+    slotStepMinutes: 15,
+    workingHours: #{
+      days: #[1, 2, 3, 4, 5],
+      start: "09:00",
+      end: "18:00",
+    },
+  },
+)
 model PublicConfig {
   /** Например, "Europe/Moscow". */
   timezone: string;
@@ -116,6 +154,7 @@ model PublicConfig {
 // ─────────────────────────────── Ошибки ───────────────────────────────
 
 @error
+@example(#{ statusCode: 404, code: "not_found" })
 model NotFound {
   @statusCode statusCode: 404;
   code: "not_found";
@@ -123,6 +162,7 @@ model NotFound {
 
 /** Слот уже занят к моменту брони (в т.ч. гонка двух гостей за один слот). */
 @error
+@example(#{ statusCode: 409, code: "slot_unavailable" })
 model SlotUnavailable {
   @statusCode statusCode: 409;
   code: "slot_unavailable";
@@ -130,6 +170,7 @@ model SlotUnavailable {
 
 /** `start` не бьётся с сеткой слотов или лежит вне окна бронирования. */
 @error
+@example(#{ statusCode: 422, code: "invalid_slot" })
 model InvalidSlot {
   @statusCode statusCode: 422;
   code: "invalid_slot";
@@ -137,6 +178,7 @@ model InvalidSlot {
 
 /** Нельзя удалить тип события, у которого есть существующие брони. */
 @error
+@example(#{ statusCode: 409, code: "event_type_has_bookings" })
 model EventTypeHasBookings {
   @statusCode statusCode: 409;
   code: "event_type_has_bookings";
@@ -196,9 +238,39 @@ op viewEventType(@path id: string): EventType | NotFound;
  * и рабочими часами из конфига, нарезает по длительности типа события
  * с шагом `slotStepMinutes` и вычитает пересечения с непогашенными бронями.
  * Слоты не пересекаются, смежные допустимы: [start, end).
+ *
+ * Пример ответа ниже нужен мок-серверу Prism. Даты статичны и со временем
+ * выходят из окна бронирования — это ограничение Prism; stateful и негативные
+ * сценарии покрывает MSW.
  */
 @route("/event-types/{id}/slots")
 @get
+@opExample(
+  #{
+    returnType: #[
+      #{
+        start: utcDateTime.fromISO("2026-08-10T09:00:00+03:00"),
+        end: utcDateTime.fromISO("2026-08-10T09:15:00+03:00"),
+      },
+      #{
+        start: utcDateTime.fromISO("2026-08-10T09:15:00+03:00"),
+        end: utcDateTime.fromISO("2026-08-10T09:30:00+03:00"),
+      },
+      #{
+        start: utcDateTime.fromISO("2026-08-10T10:00:00+03:00"),
+        end: utcDateTime.fromISO("2026-08-10T10:15:00+03:00"),
+      },
+      #{
+        start: utcDateTime.fromISO("2026-08-11T09:00:00+03:00"),
+        end: utcDateTime.fromISO("2026-08-11T09:15:00+03:00"),
+      },
+      #{
+        start: utcDateTime.fromISO("2026-08-11T11:00:00+03:00"),
+        end: utcDateTime.fromISO("2026-08-11T11:15:00+03:00"),
+      },
+    ],
+  },
+)
 op listSlots(
   @path id: string,
   @query from: plainDate,

@@ -15,11 +15,12 @@ Call Calendar — бронирование звонков: владелец пу
 - `npm run build` — прод-сборка фронта (`tsc -b && vite build`).
 - `npm run check` — компиляция TypeSpec без генерации.
 - `npm run generate` — генерация OpenAPI из `main.tsp`.
+- `npm run api:mock` — мок-сервер Prism (`prism mock tsp-output/schema/openapi.yaml -p 4010`), совпадает с `VITE_API_BASE_URL` в `.env.example`.
 
 ## Готовые ловушки
 
 - Адрес API задаётся только через `VITE_API_BASE_URL` (`frontend/.env.example`); Vite-прокси нет — прод-сборка работает с отдельно запущенным backend.
-- Мок-сервер Prism (`npm run api:mock`, порт 4010), на который ссылается `.env.example`, **ещё не настроен** — не вызывай его и не добавляй скрипт без необходимости.
+- Мок-сервер Prism (`npm run api:mock`, порт 4010) работает на примерах из `main.tsp` (`@example`/`@opExample`). Это ограничение Prism: примеры слотов статичны и со временем выходят из окна бронирования; stateful/негативные сценарии покроет MSW. Новые примеры добавляй в `main.tsp` и перегенерируй OpenAPI.
 - **Нет lint и нет тестов** (Vitest/Playwright/MSW запланированы, но не установлены). Проверка после правок: `npm run typecheck` + `npm run check`.
 - Страницы — заглушки; API-интеграция (`shared/api`) ещё не реализована. Не создавай ручные копии типов `EventType`/`Booking`/`Slot` — они генерятся из OpenAPI.
 - `.github/workflows/hexlet-check.yml` — системный CI Hexlet, не редактируй его и README-бейдж; тесты Hexlet идут на каждый push.
