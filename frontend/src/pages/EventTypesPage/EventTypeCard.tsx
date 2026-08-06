@@ -11,7 +11,7 @@ export function EventTypeCard({ eventType }: { eventType: EventType }) {
       className={styles.card}
       aria-label={`${eventType.title}, длительность ${formatDuration(eventType.durationMinutes)}`}
     >
-      <Group justify="space-between" wrap="nowrap">
+      <Group justify="space-between" wrap="wrap">
         <Box>
           <Text fw={600} fz="lg">
             {eventType.title}

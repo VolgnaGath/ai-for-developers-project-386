@@ -1,6 +1,8 @@
 import { Container, Group } from '@mantine/core';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Brand } from '../shared/ui/Brand';
+import { SkipLink } from '../shared/ui/SkipLink';
+import { Main } from '../shared/ui/Main';
 import styles from './AdminLayout.module.css';
 
 const navItems = [
@@ -11,10 +13,11 @@ const navItems = [
 export default function AdminLayout() {
   return (
     <div className={styles.root}>
+      <SkipLink />
       <header className={styles.header}>
         <Container size={1120} className={styles.headerInner}>
           <Brand />
-          <Group gap="xs" component="nav" aria-label="Администрирование">
+          <Group gap="xs" component="nav" aria-label="Администрирование" wrap="wrap">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -30,9 +33,9 @@ export default function AdminLayout() {
           </Group>
         </Container>
       </header>
-      <main className={styles.main}>
+      <Main>
         <Outlet />
-      </main>
+      </Main>
     </div>
   );
 }

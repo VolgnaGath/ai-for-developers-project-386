@@ -10,12 +10,14 @@ import {
   Title,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
+import { useDocumentTitle } from '@mantine/hooks';
 import { getConfig, listBookings } from '../../shared/api/bookings';
 import { listEventTypes } from '../../shared/api/eventTypes';
 import { isApiError, NetworkError } from '../../shared/api/errors';
 import { formatDateTime, plainDateKey, todayInZone } from '../../shared/date/timezone';
 
 export default function AdminBookingsPage() {
+  useDocumentTitle('Предстоящие встречи — Call Calendar');
   const configQuery = useQuery({ queryKey: ['config'], queryFn: getConfig });
   const config = configQuery.data;
 
@@ -113,47 +115,49 @@ export default function AdminBookingsPage() {
         Список бронирований всех типов событий, от «сегодня» и далее.
       </Text>
 
-      <Table withColumnBorders highlightOnHover verticalSpacing="sm">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Дата и время</Table.Th>
-            <Table.Th>Гость</Table.Th>
-            <Table.Th>Тип события</Table.Th>
-            <Table.Th>Длительность</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {sortedBookings.map((booking) => {
-            const eventType = eventTypesById.get(booking.eventTypeId);
-            return (
-              <Table.Tr key={booking.id}>
-                <Table.Td>
-                  {config ? formatDateTime(booking.start, config.timezone) : booking.start}
-                </Table.Td>
-                <Table.Td>{booking.guestName}</Table.Td>
-                <Table.Td>
-                  {eventType ? (
-                    eventType.title
-                  ) : (
-                    <Text component="span" c="dimmed">
-                      {booking.eventTypeId}
-                    </Text>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {eventType ? (
-                    <Badge variant="light" color="orange">
-                      {formatDuration(eventType.durationMinutes)}
-                    </Badge>
-                  ) : (
-                    '—'
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            );
-          })}
-        </Table.Tbody>
-      </Table>
+      <Table.ScrollContainer minWidth={640} type="native">
+        <Table withColumnBorders highlightOnHover verticalSpacing="sm">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Дата и время</Table.Th>
+              <Table.Th>Гость</Table.Th>
+              <Table.Th>Тип события</Table.Th>
+              <Table.Th>Длительность</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {sortedBookings.map((booking) => {
+              const eventType = eventTypesById.get(booking.eventTypeId);
+              return (
+                <Table.Tr key={booking.id}>
+                  <Table.Td>
+                    {config ? formatDateTime(booking.start, config.timezone) : booking.start}
+                  </Table.Td>
+                  <Table.Td>{booking.guestName}</Table.Td>
+                  <Table.Td>
+                    {eventType ? (
+                      eventType.title
+                    ) : (
+                      <Text component="span" c="dimmed">
+                        {booking.eventTypeId}
+                      </Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {eventType ? (
+                      <Badge variant="light" color="orange">
+                        {formatDuration(eventType.durationMinutes)}
+                      </Badge>
+                    ) : (
+                      '—'
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
     </Container>
   );
 }

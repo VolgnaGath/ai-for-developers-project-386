@@ -13,6 +13,7 @@ import {
   Title,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { useDocumentTitle } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { deleteEventType, listEventTypes } from '../../shared/api/eventTypes';
@@ -22,6 +23,8 @@ import { isApiError, NetworkError } from '../../shared/api/errors';
 export default function AdminEventTypesPage() {
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<EventType | null>(null);
+
+  useDocumentTitle('Типы событий — Call Calendar');
 
   const query = useQuery({
     queryKey: ['admin-event-types'],
@@ -52,7 +55,7 @@ export default function AdminEventTypesPage() {
 
   return (
     <Container size={1120} py="xl">
-      <Group justify="space-between" align="center" mb="xl">
+      <Group justify="space-between" align="center" mb="xl" wrap="wrap" gap="sm">
         <div>
           <Title order={1} mb={4}>
             Типы событий
@@ -107,7 +110,7 @@ export default function AdminEventTypesPage() {
                     </Text>
                   ) : null}
                 </div>
-                <Group gap="xs" wrap="nowrap">
+                <Group gap="xs" wrap="wrap">
                   <Badge variant="light" color="orange" size="lg">
                     {formatDuration(eventType.durationMinutes)}
                   </Badge>
