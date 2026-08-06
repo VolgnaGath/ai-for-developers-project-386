@@ -26,6 +26,10 @@ export function plainDateKey(day: Dayjs): string {
   return day.format('YYYY-MM-DD');
 }
 
+export function instantDateKey(iso: string, timezone: string): string {
+  return dayjs(iso).tz(timezone).startOf('day').format('YYYY-MM-DD');
+}
+
 export function isValidPlainDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = dayjs.tz(value, 'UTC');
@@ -47,7 +51,7 @@ export function visibleGridRange(month: string, timezone: string): { from: strin
   const first = parsePlainDate(month, timezone).startOf('month');
   const gridStart = first.subtract((first.day() + 6) % 7, 'day');
   const last = first.endOf('month');
-  const gridEnd = last.add((6 - last.day()) % 7, 'day');
+  const gridEnd = last.add((7 - last.day()) % 7, 'day');
   return { from: plainDateKey(gridStart), to: plainDateKey(gridEnd) };
 }
 

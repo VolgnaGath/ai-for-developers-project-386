@@ -9,6 +9,7 @@ import { createEventType, getEventType, updateEventType } from '../../shared/api
 import { isApiError, NetworkError } from '../../shared/api/errors';
 import { EventTypeForm } from '../../features/event-types/EventTypeForm';
 import type { EventTypeFormValues } from '../../features/event-types/EventTypeForm';
+import { validateEventTypeForm } from '../../features/event-types/eventTypeValidation';
 import styles from './AdminEventTypeFormPage.module.css';
 
 export default function AdminEventTypeFormPage() {
@@ -34,11 +35,7 @@ export default function AdminEventTypeFormPage() {
 
   const form = useForm<EventTypeFormValues>({
     initialValues: { title: '', description: '', durationMinutes: 30 },
-    validate: {
-      title: (value) => (value.trim() ? null : 'Укажите название'),
-      durationMinutes: (value) =>
-        value === 15 || value === 30 ? null : 'Выберите длительность встречи',
-    },
+    validate: validateEventTypeForm,
   });
 
   useEffect(() => {

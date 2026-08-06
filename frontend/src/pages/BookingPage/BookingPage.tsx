@@ -32,9 +32,9 @@ import { CalendarPicker } from '../../features/booking/CalendarPicker';
 import { SlotList } from '../../features/booking/SlotList';
 import { BookingForm } from '../../features/booking/BookingForm';
 import type { BookingFormValues } from '../../features/booking/BookingForm';
+import { validateBookingForm } from '../../features/booking/bookingValidation';
+import { groupSlotsByDay } from '../../features/booking/slots';
 import styles from './BookingPage.module.css';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function BookingPage() {
   const { eventTypeId = '' } = useParams();
@@ -92,17 +92,10 @@ export default function BookingPage() {
     refetchOnWindowFocus: true,
   });
 
-  const slotsByDay = useMemo(() => {
-    if (!timezone || !slotsQuery.data) return new Map<string, Slot[]>();
-    const byDay = new Map<string, Slot[]>();
-    for (const slot of slotsQuery.data) {
-      const key = parsePlainDate(slot.start, timezone).format('YYYY-MM-DD');
-      const list = byDay.get(key);
-      if (list) list.push(slot);
-      else byDay.set(key, [slot]);
-    }
-    return byDay;
-  }, [slotsQuery.data, timezone]);
+  const slotsByDay = useMemo(
+    () => (timezone && slotsQuery.data ? groupSlotsByDay(slotsQuery.data, timezone) : new Map<string, Slot[]>()),
+    [slotsQuery.data, timezone],
+  );
 
   const daysWithSlots = useMemo(() => new Set(slotsByDay.keys()), [slotsByDay]);
   const daySlots = useMemo(
@@ -114,14 +107,7 @@ export default function BookingPage() {
 
   const form = useForm<BookingFormValues>({
     initialValues: { guestName: '', guestEmail: '' },
-    validate: {
-      guestName: (value) => (value.trim() ? null : 'Укажите ваше имя'),
-      guestEmail: (value) => {
-        const email = value.trim();
-        if (email && !EMAIL_RE.test(email)) return 'Введите корректный email';
-        return null;
-      },
-    },
+    validate: validateBookingForm,
   });
 
   const bookingMutation = useMutation({

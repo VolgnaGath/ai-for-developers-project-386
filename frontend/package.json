@@ -7,6 +7,8 @@
     "dev": "vite --port 5173 --strictPort",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview --port 4173 --strictPort",
     "codegen": "openapi-typescript ../tsp-output/schema/openapi.yaml -o src/shared/api/generated.ts"
   },
@@ -29,6 +31,7 @@
     "@vitejs/plugin-react": "^4.0.0",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.7.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^4.1.10"
   }
 }
