@@ -98,7 +98,7 @@ export default function AdminEventTypesPage() {
       {query.isSuccess && query.data.length > 0 ? (
         <Stack gap="md">
           {query.data.map((eventType) => (
-            <Card key={eventType.id} withBorder>
+            <Card key={eventType.id} withBorder data-testid="event-type-card">
               <Group justify="space-between" align="flex-start" wrap="nowrap">
                 <div>
                   <Text fw={600} fz="lg">
