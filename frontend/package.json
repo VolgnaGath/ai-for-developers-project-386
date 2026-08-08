@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview --port 4173 --strictPort",
+    "dev:e2e": "vite --port 5199 --strictPort --host 127.0.0.1",
+    "e2e": "playwright test",
     "codegen": "openapi-typescript ../tsp-output/schema/openapi.yaml -o src/shared/api/generated.ts"
   },
   "dependencies": {
@@ -26,9 +28,13 @@
     "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
+    "@msw/playwright": "^0.6.7",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.0.0",
+    "msw": "^2.15.0",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.7.0",
     "vite": "^7.0.0",
