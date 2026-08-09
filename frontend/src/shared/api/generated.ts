@@ -11,7 +11,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Страница предстоящих встреч — общий список бронирований всех типов. */
+        /**
+         * @description Страница предстоящих встреч — общий список бронирований всех типов.
+         *
+         *     `from` и `to` — включительные календарные даты в таймзоне конфига.
+         *     Диапазон `from` > `to` не является ошибкой: фильтр вырождается в пустой результат.
+         */
         get: operations["listBookings"];
         put?: never;
         post?: never;
@@ -70,8 +75,14 @@ export interface paths {
          * @description Создать бронь на выбранный слот.
          *
          *     Сервер не доверяет клиенту и заново проверяет свободность `start`:
-         *     409 — слот уже занят, 422 — `start` вне сетки/окна, 404 — нет типа события.
-         *     При успехе `end` и `status: confirmed` проставляет сервер.
+         *     400 — malformed тело/поля (проверяет router), 404 — нет типа события,
+         *     422 — `start` синтаксически корректен, но не является базовым кандидатом
+         *     (вне сетки, окна или рабочих часов),
+         *     409 — базовый кандидат корректен, но слот уже занят (в т.ч. гонка гостей);
+         *     занятость владельца общая между всеми типами событий.
+         *     При успехе `end`, `status: confirmed` и `createdAt` проставляет сервер.
+         *     Входной timestamp принимается с любым корректным offset (сравнение как момент
+         *     времени); ответные timestamps сериализуются в UTC с `Z`.
          */
         post: operations["createBooking"];
         delete?: never;
@@ -139,11 +150,14 @@ export interface paths {
         /**
          * @description Свободные слоты для типа события в диапазоне дат.
          *
-         *     `from` и `to` — календарные даты, трактуются в таймзоне конфига (`PublicConfig.timezone`).
-         *     Сервер пересекает [from, to] с окном бронирования (14 дней от «сейчас»)
-         *     и рабочими часами из конфига, нарезает по длительности типа события
-         *     с шагом `slotStepMinutes` и вычитает пересечения с непогашенными бронями.
-         *     Слоты не пересекаются, смежные допустимы: [start, end).
+         *     `from` и `to` — включительные календарные даты, трактуются в таймзоне конфига
+         *     (`PublicConfig.timezone`). `from` > `to` — ошибка `400`.
+         *     Сервер пересекает [from, to] с окном бронирования (сегодня и следующие 13 дат
+         *     в таймзоне конфига) и рабочими часами из конфига, нарезает по длительности
+         *     типа события с шагом `slotStepMinutes` и вычитает пересечения с бронями.
+         *     Занятость владельца общая между всеми типами событий: любая бронь блокирует
+         *     пересекающиеся слоты любого типа. Слоты смежные допустимы: [start, end).
+         *     Диапазон, целиком лежащий вне окна бронирования, возвращает `200 []`.
          *
          *     Пример ответа ниже нужен мок-серверу Prism. Даты статичны и со временем
          *     выходят из окна бронирования — это ограничение Prism; stateful и негативные
@@ -158,10 +172,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Готовность процесса. Внешних зависимостей в v1 нет. */
+        get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+         *     и диапазон `from` > `to` в `listSlots`.
+         * @example {
+         *       "statusCode": 400,
+         *       "code": "bad_request"
+         *     }
+         */
+        BadRequest: {
+            /** @enum {string} */
+            code: "bad_request";
+        };
+        /**
+         * @description Пустая или состоящая только из пробелов строка.
+         *     Позволяет клиенту передать "заглушку" для email/описания:
+         *     backend после trim превращает её в отсутствие значения.
+         */
+        BlankString: string;
         /**
          * @description Бронирование гостя.
          * @example {
@@ -201,14 +250,19 @@ export interface components {
              */
             start: string;
             guestName: string;
-            /** Format: email */
-            guestEmail?: string;
+            /** @description Пустая/whitespace-строка допустима только здесь — backend нормализует её в отсутствие поля. */
+            guestEmail?: components["schemas"]["BlankString"] | components["schemas"]["Email"];
         };
         /**
          * @description Статус брони. В v1 — только подтверждённые: отмены/переноса нет.
          * @enum {string}
          */
         BookingStatus: "confirmed";
+        /**
+         * Format: email
+         * @description Корректный email. Сохраняется в исходном регистре, без lowercase.
+         */
+        Email: string;
         /**
          * @description Тип события, которым управляет владелец.
          * @example {
@@ -228,6 +282,18 @@ export interface components {
              * @enum {number}
              */
             durationMinutes: 15 | 30;
+        };
+        /**
+         * @description Нельзя изменить длительность типа события, у которого есть существующие брони.
+         *     Название и описание менять можно; `durationMinutes` — нет.
+         * @example {
+         *       "statusCode": 409,
+         *       "code": "event_type_duration_locked"
+         *     }
+         */
+        EventTypeDurationLocked: {
+            /** @enum {string} */
+            code: "event_type_duration_locked";
         };
         /**
          * @description Нельзя удалить тип события, у которого есть существующие брони.
@@ -250,8 +316,26 @@ export interface components {
             /** @enum {number} */
             durationMinutes: 15 | 30;
         };
+        /** @description Ответ health check. */
+        HealthResponse: {
+            /** @enum {string} */
+            status: "ok";
+        };
         /**
-         * @description `start` не бьётся с сеткой слотов или лежит вне окна бронирования.
+         * @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+         * @example {
+         *       "statusCode": 500,
+         *       "code": "internal_error"
+         *     }
+         */
+        InternalError: {
+            /** @enum {string} */
+            code: "internal_error";
+        };
+        /**
+         * @description `start` синтаксически корректен, но не является базовым кандидатом:
+         *     не бьётся с сеткой слотов, лежит вне окна бронирования или рабочих часов.
+         *     Malformed-поля тела запроса — это `400`, а не `422`.
          * @example {
          *       "statusCode": 422,
          *       "code": "invalid_slot"
@@ -270,6 +354,17 @@ export interface components {
         NotFound: {
             /** @enum {string} */
             code: "not_found";
+        };
+        /**
+         * @description Превышен лимит тела запроса (стандартный лимит `express.json()` в 100kb).
+         * @example {
+         *       "statusCode": 413,
+         *       "code": "payload_too_large"
+         *     }
+         */
+        PayloadTooLarge: {
+            /** @enum {string} */
+            code: "payload_too_large";
         };
         /**
          * @description Публичная часть конфига доступности — нужна фронту для рендера календаря.
@@ -295,7 +390,7 @@ export interface components {
             timezone: string;
             /**
              * Format: int32
-             * @description Горизонт бронирования, в v1 — 14.
+             * @description Окно бронирования: сегодня и следующие 13 календарных дат в таймзоне конфига.
              */
             bookingWindowDays: number;
             /**
@@ -315,7 +410,7 @@ export interface components {
         Slot: {
             /**
              * Format: date-time
-             * @description Начало слота. Слоты не пересекаются, смежные допустимы: [start, end).
+             * @description Начало слота. Смежные слоты допустимы: [start, end).
              */
             start: string;
             /** Format: date-time */
@@ -371,6 +466,27 @@ export interface operations {
                     "application/json": components["schemas"]["Booking"][];
                 };
             };
+            /**
+             * @description Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+             *     и диапазон `from` > `to` в `listSlots`.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequest"];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
+                };
+            };
         };
     };
     listEventTypes: {
@@ -389,6 +505,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventType"][];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
                 };
             };
         };
@@ -413,6 +538,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventType"];
+                };
+            };
+            /**
+             * @description Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+             *     и диапазон `from` > `to` в `listSlots`.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequest"];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
                 };
             };
         };
@@ -446,6 +592,15 @@ export interface operations {
                     "application/json": components["schemas"]["NotFound"];
                 };
             };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
+                };
+            };
         };
     };
     updateEventType: {
@@ -472,6 +627,18 @@ export interface operations {
                     "application/json": components["schemas"]["EventType"];
                 };
             };
+            /**
+             * @description Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+             *     и диапазон `from` > `to` в `listSlots`.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequest"];
+                };
+            };
             /** @description The server cannot find the requested resource. */
             404: {
                 headers: {
@@ -479,6 +646,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotFound"];
+                };
+            };
+            /**
+             * @description Нельзя изменить длительность типа события, у которого есть существующие брони.
+             *     Название и описание менять можно; `durationMinutes` — нет.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventTypeDurationLocked"];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
                 };
             };
         };
@@ -519,6 +707,15 @@ export interface operations {
                     "application/json": components["schemas"]["EventTypeHasBookings"];
                 };
             };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
+                };
+            };
         };
     };
     createBooking: {
@@ -543,6 +740,18 @@ export interface operations {
                     "application/json": components["schemas"]["Booking"];
                 };
             };
+            /**
+             * @description Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+             *     и диапазон `from` > `to` в `listSlots`.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequest"];
+                };
+            };
             /** @description The server cannot find the requested resource. */
             404: {
                 headers: {
@@ -561,13 +770,26 @@ export interface operations {
                     "application/json": components["schemas"]["SlotUnavailable"];
                 };
             };
-            /** @description `start` не бьётся с сеткой слотов или лежит вне окна бронирования. */
+            /**
+             * @description `start` синтаксически корректен, но не является базовым кандидатом:
+             *     не бьётся с сеткой слотов, лежит вне окна бронирования или рабочих часов.
+             *     Malformed-поля тела запроса — это `400`, а не `422`.
+             */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["InvalidSlot"];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
                 };
             };
         };
@@ -590,6 +812,15 @@ export interface operations {
                     "application/json": components["schemas"]["PublicConfig"];
                 };
             };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
+                };
+            };
         };
     };
     browseEventTypes: {
@@ -608,6 +839,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventType"][];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
                 };
             };
         };
@@ -639,6 +879,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotFound"];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
                 };
             };
         };
@@ -690,6 +939,18 @@ export interface operations {
                     "application/json": components["schemas"]["Slot"][];
                 };
             };
+            /**
+             * @description Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+             *     и диапазон `from` > `to` в `listSlots`.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BadRequest"];
+                };
+            };
             /** @description The server cannot find the requested resource. */
             404: {
                 headers: {
@@ -697,6 +958,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotFound"];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
+                };
+            };
+        };
+    };
+    health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalError"];
                 };
             };
         };

@@ -43,8 +43,13 @@ model EventType {
  * Без `id` — его проставляет сервер; пользователь задаёт только нейминг.
  */
 model EventTypeInput {
+  @minLength(1)
+  @maxLength(100)
   title: string;
+
+  @maxLength(1000)
   description?: string;
+
   durationMinutes: 15 | 30;
 }
 
@@ -85,6 +90,20 @@ model Booking {
   createdAt: utcDateTime;
 }
 
+/** Корректный email. Сохраняется в исходном регистре, без lowercase. */
+@format("email")
+@maxLength(254)
+scalar Email extends string;
+
+/**
+ * Пустая или состоящая только из пробелов строка.
+ * Позволяет клиенту передать "заглушку" для email/описания:
+ * backend после trim превращает её в отсутствие значения.
+ */
+@pattern("^\\s*$")
+@maxLength(254)
+scalar BlankString extends string;
+
 /** Тело запроса на бронирование. */
 model BookingInput {
   eventTypeId: string;
@@ -93,10 +112,11 @@ model BookingInput {
   start: utcDateTime;
 
   @minLength(1)
+  @maxLength(100)
   guestName: string;
 
-  @format("email")
-  guestEmail?: string;
+  /** Пустая/whitespace-строка допустима только здесь — backend нормализует её в отсутствие поля. */
+  guestEmail?: BlankString | Email;
 }
 
 /** Вычисляемый свободный слот (не хранится, только читается гостем). */
@@ -107,7 +127,7 @@ model BookingInput {
   },
 )
 model Slot {
-  /** Начало слота. Слоты не пересекаются, смежные допустимы: [start, end). */
+  /** Начало слота. Смежные слоты допустимы: [start, end). */
   start: utcDateTime;
 
   end: utcDateTime;
@@ -142,7 +162,7 @@ model PublicConfig {
   /** Например, "Europe/Moscow". */
   timezone: string;
 
-  /** Горизонт бронирования, в v1 — 14. */
+  /** Окно бронирования: сегодня и следующие 13 календарных дат в таймзоне конфига. */
   bookingWindowDays: int32;
 
   /** Шаг сетки свободных слотов в минутах, в v1 — 15. */
@@ -168,7 +188,11 @@ model SlotUnavailable {
   code: "slot_unavailable";
 }
 
-/** `start` не бьётся с сеткой слотов или лежит вне окна бронирования. */
+/**
+ * `start` синтаксически корректен, но не является базовым кандидатом:
+ * не бьётся с сеткой слотов, лежит вне окна бронирования или рабочих часов.
+ * Malformed-поля тела запроса — это `400`, а не `422`.
+ */
 @error
 @example(#{ statusCode: 422, code: "invalid_slot" })
 model InvalidSlot {
@@ -184,23 +208,64 @@ model EventTypeHasBookings {
   code: "event_type_has_bookings";
 }
 
+/**
+ * Нельзя изменить длительность типа события, у которого есть существующие брони.
+ * Название и описание менять можно; `durationMinutes` — нет.
+ */
+@error
+@example(#{ statusCode: 409, code: "event_type_duration_locked" })
+model EventTypeDurationLocked {
+  @statusCode statusCode: 409;
+  code: "event_type_duration_locked";
+}
+
+/**
+ * Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+ * и диапазон `from` > `to` в `listSlots`.
+ */
+@error
+@example(#{ statusCode: 400, code: "bad_request" })
+model BadRequest {
+  @statusCode statusCode: 400;
+  code: "bad_request";
+}
+
+/** Превышен лимит тела запроса (стандартный лимит `express.json()` в 100kb). */
+@error
+@example(#{ statusCode: 413, code: "payload_too_large" })
+model PayloadTooLarge {
+  @statusCode statusCode: 413;
+  code: "payload_too_large";
+}
+
+/** Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются. */
+@error
+@example(#{ statusCode: 500, code: "internal_error" })
+model InternalError {
+  @statusCode statusCode: 500;
+  code: "internal_error";
+}
+
 // ────────────────────── Владелец (админская часть) ──────────────────────
 
 @route("/admin/event-types")
 @get
-op listEventTypes(): EventType[];
+op listEventTypes(): EventType[] | InternalError;
 
 @route("/admin/event-types")
 @post
-op createEventType(@body body: EventTypeInput): EventType;
+op createEventType(@body body: EventTypeInput): EventType | BadRequest | InternalError;
 
 @route("/admin/event-types/{id}")
 @get
-op getEventType(@path id: string): EventType | NotFound;
+op getEventType(@path id: string): EventType | NotFound | InternalError;
 
 @route("/admin/event-types/{id}")
 @put
-op updateEventType(@path id: string, @body body: EventTypeInput): EventType | NotFound;
+op updateEventType(
+  @path id: string,
+  @body body: EventTypeInput,
+): EventType | NotFound | BadRequest | EventTypeDurationLocked | InternalError;
 
 /**
  * Удалить тип события.
@@ -208,36 +273,47 @@ op updateEventType(@path id: string, @body body: EventTypeInput): EventType | No
  */
 @route("/admin/event-types/{id}")
 @delete
-op deleteEventType(@path id: string): void | NotFound | EventTypeHasBookings;
+op deleteEventType(@path id: string): void | NotFound | EventTypeHasBookings | InternalError;
 
-/** Страница предстоящих встреч — общий список бронирований всех типов. */
+/**
+ * Страница предстоящих встреч — общий список бронирований всех типов.
+ *
+ * `from` и `to` — включительные календарные даты в таймзоне конфига.
+ * Диапазон `from` > `to` не является ошибкой: фильтр вырождается в пустой результат.
+ */
 @route("/admin/bookings")
 @get
-op listBookings(@query from?: plainDate, @query to?: plainDate): Booking[];
+op listBookings(
+  @query from?: plainDate,
+  @query to?: plainDate,
+): Booking[] | BadRequest | InternalError;
 
 // ────────────────────── Гость (публичная часть) ──────────────────────
 
 @route("/config")
 @get
-op getConfig(): PublicConfig;
+op getConfig(): PublicConfig | InternalError;
 
 /** Витрина видов брони: название, описание, длительность. */
 @route("/event-types")
 @get
-op browseEventTypes(): EventType[];
+op browseEventTypes(): EventType[] | InternalError;
 
 @route("/event-types/{id}")
 @get
-op viewEventType(@path id: string): EventType | NotFound;
+op viewEventType(@path id: string): EventType | NotFound | InternalError;
 
 /**
  * Свободные слоты для типа события в диапазоне дат.
  *
- * `from` и `to` — календарные даты, трактуются в таймзоне конфига (`PublicConfig.timezone`).
- * Сервер пересекает [from, to] с окном бронирования (14 дней от «сейчас»)
- * и рабочими часами из конфига, нарезает по длительности типа события
- * с шагом `slotStepMinutes` и вычитает пересечения с непогашенными бронями.
- * Слоты не пересекаются, смежные допустимы: [start, end).
+ * `from` и `to` — включительные календарные даты, трактуются в таймзоне конфига
+ * (`PublicConfig.timezone`). `from` > `to` — ошибка `400`.
+ * Сервер пересекает [from, to] с окном бронирования (сегодня и следующие 13 дат
+ * в таймзоне конфига) и рабочими часами из конфига, нарезает по длительности
+ * типа события с шагом `slotStepMinutes` и вычитает пересечения с бронями.
+ * Занятость владельца общая между всеми типами событий: любая бронь блокирует
+ * пересекающиеся слоты любого типа. Слоты смежные допустимы: [start, end).
+ * Диапазон, целиком лежащий вне окна бронирования, возвращает `200 []`.
  *
  * Пример ответа ниже нужен мок-серверу Prism. Даты статичны и со временем
  * выходят из окна бронирования — это ограничение Prism; stateful и негативные
@@ -275,15 +351,35 @@ op listSlots(
   @path id: string,
   @query from: plainDate,
   @query to: plainDate,
-): Slot[] | NotFound;
+): Slot[] | BadRequest | NotFound | InternalError;
 
 /**
  * Создать бронь на выбранный слот.
  *
  * Сервер не доверяет клиенту и заново проверяет свободность `start`:
- *   409 — слот уже занят, 422 — `start` вне сетки/окна, 404 — нет типа события.
- * При успехе `end` и `status: confirmed` проставляет сервер.
+ *   400 — malformed тело/поля (проверяет router), 404 — нет типа события,
+ *   422 — `start` синтаксически корректен, но не является базовым кандидатом
+ *        (вне сетки, окна или рабочих часов),
+ *   409 — базовый кандидат корректен, но слот уже занят (в т.ч. гонка гостей);
+ *        занятость владельца общая между всеми типами событий.
+ * При успехе `end`, `status: confirmed` и `createdAt` проставляет сервер.
+ * Входной timestamp принимается с любым корректным offset (сравнение как момент
+ * времени); ответные timestamps сериализуются в UTC с `Z`.
  */
 @route("/bookings")
 @post
-op createBooking(@body body: BookingInput): Booking | SlotUnavailable | InvalidSlot | NotFound;
+op createBooking(
+  @body body: BookingInput,
+): Booking | BadRequest | NotFound | SlotUnavailable | InvalidSlot | InternalError;
+
+// ─────────────────────────────── Система ───────────────────────────────
+
+/** Ответ health check. */
+model HealthResponse {
+  status: "ok";
+}
+
+/** Готовность процесса. Внешних зависимостей в v1 нет. */
+@route("/health")
+@get
+op health(): HealthResponse | InternalError;

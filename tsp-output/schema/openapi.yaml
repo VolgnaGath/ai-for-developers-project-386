@@ -17,7 +17,11 @@ paths:
   /admin/bookings:
     get:
       operationId: listBookings
-      description: Страница предстоящих встреч — общий список бронирований всех типов.
+      description: |-
+        Страница предстоящих встреч — общий список бронирований всех типов.
+
+        `from` и `to` — включительные календарные даты в таймзоне конфига.
+        Диапазон `from` > `to` не является ошибкой: фильтр вырождается в пустой результат.
       parameters:
         - name: from
           in: query
@@ -42,6 +46,20 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Booking'
+        '400':
+          description: |-
+            Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+            и диапазон `from` > `to` в `listSlots`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
   /admin/event-types:
     get:
       operationId: listEventTypes
@@ -55,6 +73,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/EventType'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
     post:
       operationId: createEventType
       parameters: []
@@ -65,6 +89,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventType'
+        '400':
+          description: |-
+            Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+            и диапазон `from` > `to` в `listSlots`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
       requestBody:
         required: true
         content:
@@ -93,6 +131,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFound'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
     put:
       operationId: updateEventType
       parameters:
@@ -108,12 +152,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventType'
+        '400':
+          description: |-
+            Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+            и диапазон `from` > `to` в `listSlots`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest'
         '404':
           description: The server cannot find the requested resource.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFound'
+        '409':
+          description: |-
+            Нельзя изменить длительность типа события, у которого есть существующие брони.
+            Название и описание менять можно; `durationMinutes` — нет.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTypeDurationLocked'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
       requestBody:
         required: true
         content:
@@ -146,6 +212,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventTypeHasBookings'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
   /bookings:
     post:
       operationId: createBooking
@@ -153,8 +225,14 @@ paths:
         Создать бронь на выбранный слот.
 
         Сервер не доверяет клиенту и заново проверяет свободность `start`:
-        409 — слот уже занят, 422 — `start` вне сетки/окна, 404 — нет типа события.
-        При успехе `end` и `status: confirmed` проставляет сервер.
+        400 — malformed тело/поля (проверяет router), 404 — нет типа события,
+        422 — `start` синтаксически корректен, но не является базовым кандидатом
+        (вне сетки, окна или рабочих часов),
+        409 — базовый кандидат корректен, но слот уже занят (в т.ч. гонка гостей);
+        занятость владельца общая между всеми типами событий.
+        При успехе `end`, `status: confirmed` и `createdAt` проставляет сервер.
+        Входной timestamp принимается с любым корректным offset (сравнение как момент
+        времени); ответные timestamps сериализуются в UTC с `Z`.
       parameters: []
       responses:
         '200':
@@ -163,6 +241,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Booking'
+        '400':
+          description: |-
+            Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+            и диапазон `from` > `to` в `listSlots`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest'
         '404':
           description: The server cannot find the requested resource.
           content:
@@ -176,11 +262,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/SlotUnavailable'
         '422':
-          description: '`start` не бьётся с сеткой слотов или лежит вне окна бронирования.'
+          description: |-
+            `start` синтаксически корректен, но не является базовым кандидатом:
+            не бьётся с сеткой слотов, лежит вне окна бронирования или рабочих часов.
+            Malformed-поля тела запроса — это `400`, а не `422`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/InvalidSlot'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
       requestBody:
         required: true
         content:
@@ -198,6 +293,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicConfig'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
   /event-types:
     get:
       operationId: browseEventTypes
@@ -212,6 +313,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/EventType'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
   /event-types/{id}:
     get:
       operationId: viewEventType
@@ -234,17 +341,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFound'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
   /event-types/{id}/slots:
     get:
       operationId: listSlots
       description: |-
         Свободные слоты для типа события в диапазоне дат.
 
-        `from` и `to` — календарные даты, трактуются в таймзоне конфига (`PublicConfig.timezone`).
-        Сервер пересекает [from, to] с окном бронирования (14 дней от «сейчас»)
-        и рабочими часами из конфига, нарезает по длительности типа события
-        с шагом `slotStepMinutes` и вычитает пересечения с непогашенными бронями.
-        Слоты не пересекаются, смежные допустимы: [start, end).
+        `from` и `to` — включительные календарные даты, трактуются в таймзоне конфига
+        (`PublicConfig.timezone`). `from` > `to` — ошибка `400`.
+        Сервер пересекает [from, to] с окном бронирования (сегодня и следующие 13 дат
+        в таймзоне конфига) и рабочими часами из конфига, нарезает по длительности
+        типа события с шагом `slotStepMinutes` и вычитает пересечения с бронями.
+        Занятость владельца общая между всеми типами событий: любая бронь блокирует
+        пересекающиеся слоты любого типа. Слоты смежные допустимы: [start, end).
+        Диапазон, целиком лежащий вне окна бронирования, возвращает `200 []`.
 
         Пример ответа ниже нужен мок-серверу Prism. Даты статичны и со временем
         выходят из окна бронирования — это ограничение Prism; stateful и негативные
@@ -289,14 +405,69 @@ paths:
                   end: '2026-08-11T09:15:00+03:00'
                 - start: '2026-08-11T11:00:00+03:00'
                   end: '2026-08-11T11:15:00+03:00'
+        '400':
+          description: |-
+            Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+            и диапазон `from` > `to` в `listSlots`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest'
         '404':
           description: The server cannot find the requested resource.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFound'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /health:
+    get:
+      operationId: health
+      description: Готовность процесса. Внешних зависимостей в v1 нет.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
 components:
   schemas:
+    BadRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - bad_request
+      description: |-
+        Malformed JSON, отсутствующие или неверные поля, неверные query-параметры
+        и диапазон `from` > `to` в `listSlots`.
+      examples:
+        - statusCode: 400
+          code: bad_request
+    BlankString:
+      type: string
+      maxLength: 254
+      pattern: ^\s*$
+      description: |-
+        Пустая или состоящая только из пробелов строка.
+        Позволяет клиенту передать "заглушку" для email/описания:
+        backend после trim превращает её в отсутствие значения.
     Booking:
       type: object
       required:
@@ -356,15 +527,23 @@ components:
         guestName:
           type: string
           minLength: 1
+          maxLength: 100
         guestEmail:
-          type: string
-          format: email
+          anyOf:
+            - $ref: '#/components/schemas/BlankString'
+            - $ref: '#/components/schemas/Email'
+          description: Пустая/whitespace-строка допустима только здесь — backend нормализует её в отсутствие поля.
       description: Тело запроса на бронирование.
     BookingStatus:
       type: string
       enum:
         - confirmed
       description: 'Статус брони. В v1 — только подтверждённые: отмены/переноса нет.'
+    Email:
+      type: string
+      maxLength: 254
+      format: email
+      description: Корректный email. Сохраняется в исходном регистре, без lowercase.
     EventType:
       type: object
       required:
@@ -391,6 +570,21 @@ components:
           title: Консультация
           description: Короткий созвон, чтобы обсудить ваш вопрос.
           durationMinutes: 30
+    EventTypeDurationLocked:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - event_type_duration_locked
+      description: |-
+        Нельзя изменить длительность типа события, у которого есть существующие брони.
+        Название и описание менять можно; `durationMinutes` — нет.
+      examples:
+        - statusCode: 409
+          code: event_type_duration_locked
     EventTypeHasBookings:
       type: object
       required:
@@ -412,8 +606,11 @@ components:
       properties:
         title:
           type: string
+          minLength: 1
+          maxLength: 100
         description:
           type: string
+          maxLength: 1000
         durationMinutes:
           type: number
           enum:
@@ -422,6 +619,29 @@ components:
       description: |-
         Тело запроса на создание/изменение типа события.
         Без `id` — его проставляет сервер; пользователь задаёт только нейминг.
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+      description: Ответ health check.
+    InternalError:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - internal_error
+      description: Неожиданная внутренняя ошибка. Технические детали клиенту не раскрываются.
+      examples:
+        - statusCode: 500
+          code: internal_error
     InvalidSlot:
       type: object
       required:
@@ -431,7 +651,10 @@ components:
           type: string
           enum:
             - invalid_slot
-      description: '`start` не бьётся с сеткой слотов или лежит вне окна бронирования.'
+      description: |-
+        `start` синтаксически корректен, но не является базовым кандидатом:
+        не бьётся с сеткой слотов, лежит вне окна бронирования или рабочих часов.
+        Malformed-поля тела запроса — это `400`, а не `422`.
       examples:
         - statusCode: 422
           code: invalid_slot
@@ -447,6 +670,19 @@ components:
       examples:
         - statusCode: 404
           code: not_found
+    PayloadTooLarge:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - payload_too_large
+      description: Превышен лимит тела запроса (стандартный лимит `express.json()` в 100kb).
+      examples:
+        - statusCode: 413
+          code: payload_too_large
     PublicConfig:
       type: object
       required:
@@ -461,7 +697,7 @@ components:
         bookingWindowDays:
           type: integer
           format: int32
-          description: Горизонт бронирования, в v1 — 14.
+          description: 'Окно бронирования: сегодня и следующие 13 календарных дат в таймзоне конфига.'
         slotStepMinutes:
           type: integer
           format: int32
@@ -491,7 +727,7 @@ components:
         start:
           type: string
           format: date-time
-          description: 'Начало слота. Слоты не пересекаются, смежные допустимы: [start, end).'
+          description: 'Начало слота. Смежные слоты допустимы: [start, end).'
         end:
           type: string
           format: date-time
