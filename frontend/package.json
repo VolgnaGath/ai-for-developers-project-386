@@ -12,6 +12,7 @@
     "preview": "vite preview --port 4173 --strictPort",
     "dev:e2e": "vite --port 5199 --strictPort --host 127.0.0.1",
     "e2e": "playwright test",
+    "e2e:smoke": "playwright test --config playwright.smoke.config.ts",
     "codegen": "openapi-typescript ../tsp-output/schema/openapi.yaml -o src/shared/api/generated.ts"
   },
   "dependencies": {

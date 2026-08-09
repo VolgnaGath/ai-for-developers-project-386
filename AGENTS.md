@@ -15,6 +15,7 @@ Call Calendar — бронирование звонков: владелец пу
 - `npm run build` — прод-сборка фронта (`tsc -b && vite build`).
 - `npm test` — юнит-тесты фронта (Vitest).
 - `npm run e2e` — Playwright e2e (поднимает отдельный Vite на 5199, MSW перехватывает запросы; браузеры ставит `npx playwright install chromium`).
+- `npm run e2e:smoke` — Playwright smoke с реальным backend без MSW: поднимает backend (`backend/`, порт 4020) и Vite на 5199 с `VITE_API_BASE_URL` на backend; генерирует бронь и проверяет её в админке. Чистый прогон: retries выключены, чтобы не «загрязнять» in-memory Map повторами.
 - `npm run check` — компиляция TypeSpec без генерации.
 - `npm run generate` — генерация OpenAPI из `main.tsp`.
 - `npm run api:mock` — мок-сервер Prism (`prism mock tsp-output/schema/openapi.yaml -p 4010`), совпадает с `VITE_API_BASE_URL` в `.env.example`.
