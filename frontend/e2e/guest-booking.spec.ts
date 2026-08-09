@@ -1,9 +1,20 @@
 import { http, HttpResponse } from 'msw';
 import { test, expect } from './fixtures';
 import { getMockDb } from '../src/test/mocks/handlers';
+import { todayInZone } from '../src/shared/date/timezone';
 
 const CONSULTATION_CARD = 'Консультация, длительность 30 минут';
 const ONBOARDING_CARD = 'Онбординг, длительность 15 минут';
+
+function nextWorkingDay() {
+  const day = todayInZone('Europe/Moscow').add(1, 'day');
+  while (day.day() === 0 || day.day() === 6) {
+    day.add(1, 'day');
+  }
+  return day;
+}
+
+const BOOKING_URL = `/book/event-type-consultation?date=${nextWorkingDay().format('YYYY-MM-DD')}`;
 
 test.describe('Гостевое бронирование', () => {
   test('начинает бронирование с лендинга и видит типы событий', async ({ page }) => {
@@ -20,9 +31,7 @@ test.describe('Гостевое бронирование', () => {
   });
 
   test('бронирует свободный слот и видит подтверждение', async ({ page }) => {
-    await page.goto('/book');
-    await page.getByRole('link', { name: CONSULTATION_CARD }).click();
-    await expect(page).toHaveURL(/\/book\/event-type-consultation$/);
+    await page.goto(BOOKING_URL);
 
     await expect(page.getByRole('group', { name: 'Календарь бронирования' })).toBeVisible();
     await expect(page.getByText('Время: Europe/Moscow')).toBeVisible();
@@ -46,8 +55,7 @@ test.describe('Гостевое бронирование', () => {
   });
 
   test('валидирует имя и email в форме брони', async ({ page }) => {
-    await page.goto('/book');
-    await page.getByRole('link', { name: CONSULTATION_CARD }).click();
+    await page.goto(BOOKING_URL);
     await page.getByRole('button', { name: '09:00–09:30' }).click();
 
     await page.getByRole('button', { name: 'Забронировать' }).click();
@@ -78,8 +86,7 @@ test.describe('Гостевое бронирование', () => {
   test('при 409 сохраняет форму, сбрасывает слот и обновляет список слотов', async ({ page }) => {
     getMockDb().conflictOnNextBooking = true;
 
-    await page.goto('/book');
-    await page.getByRole('link', { name: CONSULTATION_CARD }).click();
+    await page.goto(BOOKING_URL);
     await page.getByRole('button', { name: '09:00–09:30' }).click();
     await page.getByLabel('Имя').fill('Иван');
     await page.getByLabel('Email').fill('ivan@example.com');
@@ -99,8 +106,7 @@ test.describe('Гостевое бронирование', () => {
   test('при 422 сбрасывает занятый слот и предлагает выбрать другой', async ({ page }) => {
     getMockDb().invalidSlotOnNextBooking = true;
 
-    await page.goto('/book');
-    await page.getByRole('link', { name: CONSULTATION_CARD }).click();
+    await page.goto(BOOKING_URL);
     await page.getByRole('button', { name: '09:00–09:30' }).click();
     await page.getByLabel('Имя').fill('Иван');
     await page.getByRole('button', { name: 'Забронировать' }).click();
@@ -109,5 +115,24 @@ test.describe('Гостевое бронирование', () => {
       'Выбранный слот недоступен. Выберите другой слот.',
     );
     await expect(page.getByRole('button', { name: '09:00–09:30' })).toBeVisible();
+  });
+
+  test('занятость общая: бронь онбординга скрывает пересекающийся слот консультации', async ({ page }) => {
+    const target = nextWorkingDay();
+    const start = target.hour(9).minute(0).second(0).millisecond(0);
+    getMockDb().bookings.push({
+      id: 'booking-onboarding',
+      eventTypeId: 'event-type-onboarding',
+      guestName: 'Общий гость',
+      guestEmail: 'guest@example.com',
+      start: start.toISOString(),
+      end: start.add(15, 'minute').toISOString(),
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+    });
+
+    await page.goto(`/book/event-type-consultation?date=${target.format('YYYY-MM-DD')}`);
+    await expect(page.getByRole('button', { name: '09:00–09:30' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '10:00–10:30' })).toBeVisible();
   });
 });

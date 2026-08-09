@@ -1,17 +1,16 @@
+import dayjs from 'dayjs';
 import { http, HttpResponse } from 'msw';
-import type { Booking, BookingInput, PublicConfig, Slot } from '../../shared/api/bookings';
+import type { Booking, BookingInput, PublicConfig } from '../../shared/api/bookings';
 import type { EventType, EventTypeInput } from '../../shared/api/eventTypes';
-import { todayInZone } from '../../shared/date/timezone';
+import { instantDateKey, nowInZone, todayInZone } from '../../shared/date/timezone';
+import { isBaseCandidateStart, listSlots } from './calendar';
 
 const CONFIG_TIMEZONE = 'Europe/Moscow';
-const SLOT_TIMES = ['09:00', '10:00', '11:00'];
-const SLOT_DAYS_AHEAD = 3;
 
 export interface MockDb {
   config: PublicConfig;
   eventTypes: EventType[];
   bookings: Booking[];
-  unavailableStarts: Set<string>;
   nextBookingId: number;
   nextEventTypeId: number;
   conflictOnNextBooking: boolean;
@@ -58,7 +57,6 @@ function createMockDb(): MockDb {
     config,
     eventTypes,
     bookings: [booking],
-    unavailableStarts: new Set([booking.start]),
     nextBookingId: 2,
     nextEventTypeId: 2,
     conflictOnNextBooking: false,
@@ -77,22 +75,29 @@ export function resetMockDb(): MockDb {
   return mockDb;
 }
 
-function generateSlots(eventType: EventType): Slot[] {
-  const timezone = getMockDb().config.timezone;
-  const slots: Slot[] = [];
-  for (let offset = 0; offset < SLOT_DAYS_AHEAD; offset++) {
-    const day = todayInZone(timezone).add(offset, 'day');
-    for (const time of SLOT_TIMES) {
-      const [hours, minutes] = time.split(':').map(Number);
-      const start = day.hour(hours).minute(minutes).second(0).millisecond(0);
-      const end = start.add(eventType.durationMinutes, 'minute');
-      slots.push({ start: start.toISOString(), end: end.toISOString() });
-    }
+function busyIntervals(db: MockDb): { start: string; end: string }[] {
+  return db.bookings.map((booking) => ({ start: booking.start, end: booking.end }));
+}
+
+function overlaps(start: string, end: string, otherStart: string, otherEnd: string): boolean {
+  return dayjs(start).valueOf() < dayjs(otherEnd).valueOf() && dayjs(otherStart).valueOf() < dayjs(end).valueOf();
+}
+
+async function readJson<T>(request: Request): Promise<T | null> {
+  try {
+    return (await request.json()) as T;
+  } catch {
+    return null;
   }
-  return slots;
+}
+
+function badRequest() {
+  return HttpResponse.json({ code: 'bad_request' }, { status: 400 });
 }
 
 export const handlers = [
+  http.get('/health', () => HttpResponse.json({ status: 'ok' })),
+
   http.get('/config', () => HttpResponse.json(getMockDb().config)),
 
   http.get('/event-types', () => HttpResponse.json(getMockDb().eventTypes)),
@@ -114,22 +119,43 @@ export const handlers = [
     const url = new URL(request.url);
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
-    const inRange =
-      from && to
-        ? (slot: Slot) => slot.start >= from && slot.start < to
-        : () => true;
-    return HttpResponse.json(
-      generateSlots(eventType).filter((slot) => !db.unavailableStarts.has(slot.start) && inRange(slot)),
-    );
+    if (!from || !to) return badRequest();
+
+    const result = listSlots({
+      config: db.config,
+      durationMinutes: eventType.durationMinutes,
+      now: nowInZone(db.config.timezone),
+      from,
+      to,
+      busy: busyIntervals(db),
+    });
+    if (!result.ok) return badRequest();
+    return HttpResponse.json(result.slots);
   }),
 
   http.post('/bookings', async ({ request }) => {
     const db = getMockDb();
-    const input = (await request.json()) as BookingInput;
+    const input = await readJson<BookingInput>(request);
+    if (!input) return badRequest();
+
+    const eventType = db.eventTypes.find((et) => et.id === input.eventTypeId);
+    if (!eventType) {
+      return HttpResponse.json({ code: 'not_found' }, { status: 404 });
+    }
 
     if (db.conflictOnNextBooking) {
       db.conflictOnNextBooking = false;
-      db.unavailableStarts.add(input.start);
+      const conflictEnd = dayjs(input.start).add(eventType.durationMinutes, 'minute').toISOString();
+      db.bookings.push({
+        id: `booking-${db.nextBookingId++}`,
+        eventTypeId: input.eventTypeId,
+        guestName: input.guestName.trim(),
+        guestEmail: input.guestEmail?.trim() || undefined,
+        start: dayjs(input.start).toISOString(),
+        end: conflictEnd,
+        status: 'confirmed',
+        createdAt: new Date().toISOString(),
+      });
       return HttpResponse.json({ code: 'slot_unavailable' }, { status: 409 });
     }
 
@@ -138,27 +164,38 @@ export const handlers = [
       return HttpResponse.json({ code: 'invalid_slot' }, { status: 422 });
     }
 
-    if (db.unavailableStarts.has(input.start)) {
-      return HttpResponse.json({ code: 'slot_unavailable' }, { status: 409 });
+    const guestName = input.guestName.trim();
+    if (!guestName) return badRequest();
+
+    const now = nowInZone(db.config.timezone);
+    if (
+      !isBaseCandidateStart({
+        config: db.config,
+        durationMinutes: eventType.durationMinutes,
+        now,
+        start: input.start,
+      })
+    ) {
+      return HttpResponse.json({ code: 'invalid_slot' }, { status: 422 });
     }
 
-    const eventType = db.eventTypes.find((et) => et.id === input.eventTypeId);
-    const durationMinutes = eventType?.durationMinutes ?? 30;
-    const start = new Date(input.start);
-    const end = new Date(start.getTime() + durationMinutes * 60_000);
+    const start = dayjs(input.start).toISOString();
+    const end = dayjs(input.start).add(eventType.durationMinutes, 'minute').toISOString();
+    if (busyIntervals(db).some((interval) => overlaps(start, end, interval.start, interval.end))) {
+      return HttpResponse.json({ code: 'slot_unavailable' }, { status: 409 });
+    }
 
     const booking: Booking = {
       id: `booking-${db.nextBookingId++}`,
       eventTypeId: input.eventTypeId,
-      guestName: input.guestName,
-      guestEmail: input.guestEmail,
-      start: input.start,
-      end: end.toISOString(),
+      guestName,
+      guestEmail: input.guestEmail?.trim() || undefined,
+      start,
+      end,
       status: 'confirmed',
       createdAt: new Date().toISOString(),
     };
     db.bookings.push(booking);
-    db.unavailableStarts.add(input.start);
     return HttpResponse.json(booking);
   }),
 
@@ -166,11 +203,15 @@ export const handlers = [
 
   http.post('/admin/event-types', async ({ request }) => {
     const db = getMockDb();
-    const input = (await request.json()) as EventTypeInput;
+    const input = await readJson<EventTypeInput>(request);
+    if (!input) return badRequest();
+    const title = input.title.trim();
+    if (!title) return badRequest();
+
     const eventType: EventType = {
       id: `event-type-${db.nextEventTypeId++}`,
-      title: input.title,
-      description: input.description,
+      title,
+      description: input.description?.trim() || undefined,
       durationMinutes: input.durationMinutes,
     };
     db.eventTypes.push(eventType);
@@ -191,11 +232,23 @@ export const handlers = [
     if (index === -1) {
       return HttpResponse.json({ code: 'not_found' }, { status: 404 });
     }
-    const input = (await request.json()) as EventTypeInput;
+    const input = await readJson<EventTypeInput>(request);
+    if (!input) return badRequest();
+    const title = input.title.trim();
+    if (!title) return badRequest();
+
+    const existing = db.eventTypes[index];
+    if (
+      input.durationMinutes !== existing.durationMinutes &&
+      db.bookings.some((booking) => booking.eventTypeId === existing.id)
+    ) {
+      return HttpResponse.json({ code: 'event_type_duration_locked' }, { status: 409 });
+    }
+
     const eventType: EventType = {
-      id: db.eventTypes[index].id,
-      title: input.title,
-      description: input.description,
+      id: existing.id,
+      title,
+      description: input.description?.trim() || undefined,
       durationMinutes: input.durationMinutes,
     };
     db.eventTypes[index] = eventType;
@@ -217,10 +270,18 @@ export const handlers = [
   }),
 
   http.get('/admin/bookings', ({ request }) => {
+    const db = getMockDb();
     const url = new URL(request.url);
     const from = url.searchParams.get('from');
-    const bookings = getMockDb()
-      .bookings.filter((booking) => (from ? booking.start >= from : true))
+    const to = url.searchParams.get('to');
+    const timezone = db.config.timezone;
+    const bookings = db.bookings
+      .filter((booking) => {
+        const date = instantDateKey(booking.start, timezone);
+        if (from && date < from) return false;
+        if (to && date > to) return false;
+        return true;
+      })
       .sort((a, b) => a.start.localeCompare(b.start));
     return HttpResponse.json(bookings);
   }),

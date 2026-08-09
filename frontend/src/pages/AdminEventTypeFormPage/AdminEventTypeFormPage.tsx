@@ -77,6 +77,10 @@ export default function AdminEventTypeFormPage() {
         setNotFound(true);
         return;
       }
+      if (isApiError(error) && error.code === 'event_type_duration_locked') {
+        setSubmitError(error.message);
+        return;
+      }
       setSubmitError(
         error instanceof NetworkError
           ? error.message

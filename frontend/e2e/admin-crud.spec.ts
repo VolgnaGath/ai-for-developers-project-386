@@ -44,6 +44,21 @@ test.describe('Административный CRUD типов событий',
     await expect(cardByTitle(page, 'Онбординг обновлённый')).toBeVisible();
   });
 
+  test('не даёт изменить длительность типа события с бронями', async ({ page }) => {
+    await page.goto('/admin/event-types');
+    const card = cardByTitle(page, 'Консультация');
+    await card.getByRole('link', { name: 'Редактировать' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Редактирование типа события' })).toBeVisible();
+    await page.getByText('15 минут').click();
+    await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+
+    await expect(page.getByRole('alert')).toContainText(
+      'Нельзя изменить длительность типа события: у него есть существующие брони.',
+    );
+    await expect(page).toHaveURL(/\/admin\/event-types\/event-type-consultation\/edit$/);
+  });
+
   test('не даёт удалить тип события с бронями', async ({ page }) => {
     await page.goto('/admin/event-types');
     const card = cardByTitle(page, 'Консультация');
