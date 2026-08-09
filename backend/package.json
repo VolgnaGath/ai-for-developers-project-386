@@ -8,6 +8,7 @@
   },
   "scripts": {
     "generate": "openapi-code-generator --input ../tsp-output/schema/openapi.yaml --input-type openapi3 --output ./src/generated --template typescript-express --schema-builder zod-v4",
+    "start": "node src/server.ts",
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run"

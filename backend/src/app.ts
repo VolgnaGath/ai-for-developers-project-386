@@ -17,7 +17,14 @@ export interface CreateAppOptions {
 
 export function createApp(options: CreateAppOptions): express.Express {
   const app = express();
-  app.use(cors({ origin: options.frontendOrigin ?? DEFAULT_FRONTEND_ORIGIN }));
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        const allowed = options.frontendOrigin ?? DEFAULT_FRONTEND_ORIGIN;
+        callback(null, origin === allowed ? allowed : false);
+      },
+    }),
+  );
   app.use(express.json());
   app.use(createRouter(createHandlers(options.store, options.clock)));
   app.use(notFoundHandler);

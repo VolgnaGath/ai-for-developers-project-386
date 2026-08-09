@@ -443,6 +443,50 @@ describe("нештатные запросы", () => {
   });
 });
 
+describe("CORS", () => {
+  it("добавляет Access-Control-Allow-Origin для разрешённого origin", async () => {
+    const { app } = makeApp();
+    const res = await request(app)
+      .get("/health")
+      .set("Origin", "http://localhost:5173");
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+  });
+
+  it("не добавляет CORS-заголовки для чужого origin, но отвечает", async () => {
+    const { app } = makeApp();
+    const res = await request(app)
+      .get("/health")
+      .set("Origin", "http://evil.example");
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(res.status).toBe(200);
+  });
+
+  it("preflight для разрешённого origin отвечает CORS-заголовками", async () => {
+    const { app } = makeApp();
+    const res = await request(app)
+      .options("/bookings")
+      .set("Origin", "http://localhost:5173")
+      .set("Access-Control-Request-Method", "POST");
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+    expect(res.headers["access-control-allow-methods"]).toContain("POST");
+  });
+
+  it("запрос без Origin работает", async () => {
+    const { app } = makeApp();
+    await request(app).get("/health").expect(200, { status: "ok" });
+  });
+
+  it("использует кастомный frontendOrigin из createApp", async () => {
+    const clock = new MutableClock(NOW);
+    const store = createStore({ clock, ids: makeIds() });
+    const app = createApp({ store, clock, frontendOrigin: "http://custom.example" });
+    const res = await request(app)
+      .get("/health")
+      .set("Origin", "http://custom.example");
+    expect(res.headers["access-control-allow-origin"]).toBe("http://custom.example");
+  });
+});
+
 describe("errorHandler", () => {
   function stubRes() {
     let statusCode = 0;
