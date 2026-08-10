@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/VolgnaGath/ai-for-developers-project-386/compare/call-calendar-v0.1.1...call-calendar-v0.2.0) (2026-08-10)
+
+
+### Features
+
+* docker packaging and single-container deployment ([#7](https://github.com/VolgnaGath/ai-for-developers-project-386/issues/7)) ([1ea5421](https://github.com/VolgnaGath/ai-for-developers-project-386/commit/1ea54217dcd587add769e755f04ed8c99db03d35))
+
 ## [0.1.1](https://github.com/VolgnaGath/ai-for-developers-project-386/compare/call-calendar-v0.1.0...call-calendar-v0.1.1) (2026-08-10)
 
 
