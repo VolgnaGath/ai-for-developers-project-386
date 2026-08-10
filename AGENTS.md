@@ -28,8 +28,25 @@ Call Calendar — бронирование звонков: владелец пу
 - Мок-сервер Prism (`npm run api:mock`, порт 4010) работает на примерах из `main.tsp` (`@example`/`@opExample`). Это ограничение Prism: примеры слотов статичны и со временем выходят из окна бронирования; stateful/негативные сценарии покрыты MSW в e2e (`frontend/src/test/mocks/handlers.ts`). Новые примеры добавляй в `main.tsp` и перегенерируй OpenAPI.
 - **Нет lint.** Тесты: Vitest (юниты) и Playwright+MSW (e2e). Проверка после правок: `npm run typecheck` + `npm run check`; для фронта — ещё `npm test` и `npm run e2e`.
 - Не создавай ручные копии типов `EventType`/`Booking`/`Slot` — они генерятся из OpenAPI и ре-экспортируются из `shared/api`.
-- `.github/workflows/hexlet-check.yml` — системный CI Hexlet, не редактируй его и README-бейдж; тесты Hexlet идут на каждый push. Отдельный CI `.github/workflows/ci.yml` (Node.js 24) проверяет TypeSpec, синхронность generated-файлов, typecheck, unit/integration-тесты, прод-сборку и Playwright (e2e + real-backend smoke).
+- `.github/workflows/hexlet-check.yml` — системный CI Hexlet, не редактируй его и README-бейдж; тесты Hexlet идут на каждый push. Отдельный CI `.github/workflows/ci.yml` (Node.js 24) проверяет TypeSpec, синхронность generated-файлов, typecheck, unit/integration-тесты, прод-сборку и Playwright (e2e + real-backend smoke). `.github/workflows/release.yml` — release-please: на push в `main` открывает или обновляет release-PR с changelog и предложенной версией (только при коммитах `feat`/`fix`/`deps`).
+- Пользовательские сценарии и уровни тестов зафиксированы в `docs/TESTING.md`.
 
 ## Рабочий процесс
 
-Каждое изменение — отдельный commit и push в `main`.
+- Все изменения — через pull request в `main`; прямых пушей в `main` нет.
+- Ветка — короткая, с префиксом типа коммита: `feat/`, `fix/`, `docs/`, `ci/`, `test/` и т.п.
+- Каждое изменение — отдельный commit; сообщения — по Conventional Commits (см. «Коммиты»).
+- Перед открытием PR: `npm run typecheck`; при изменении логики — `npm test`; при изменении фронта — `npm run e2e`; при изменении пути бронирования с реальным backend — `npm run e2e:smoke`; при изменении `main.tsp` — `npm run check` и `npm run generate`.
+- Открыть PR в `main`, дождаться зелёного CI, затем merge.
+- Merge — squash: заголовок PR (становится squash-коммитом) — тоже Conventional Commits сообщение.
+- Release-PR от release-please мерджим без ручных правок — он бампает версию, обновляет changelog и тегает релиз.
+
+## Коммиты
+
+Сообщения коммитов — по спецификации Conventional Commits: `type(scope): subject`. Агент пишет коммиты по этому же формату.
+
+- Допустимые типы: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`, `perf`, `style`, `build`.
+- Subject — на английском, в инфинитиве, без точки в конце; scope — по желанию.
+- Тело — по желанию: что и почему менялось, ссылки на PR/issue.
+- Примеры: `feat: add guest booking form`, `fix: return 409 on double booking`, `test: cover slot conflicts`, `ci: add release-please`, `docs: describe user scenarios`.
+- Релиз-PR открывает только коммит `feat`, `fix` или `deps`; для 0.x действует bump-minor-pre-major: `feat` → минорная версия, `fix` → патч. `docs`, `test`, `ci`, `chore`, `refactor` релиз не триггерят, но попадают в changelog при ближайшем релизе, вызванном другим коммитом.
