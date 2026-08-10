@@ -7,9 +7,9 @@ const CONSULTATION_CARD = 'Консультация, длительность 30
 const ONBOARDING_CARD = 'Онбординг, длительность 15 минут';
 
 function nextWorkingDay() {
-  const day = todayInZone('Europe/Moscow').add(1, 'day');
+  let day = todayInZone('Europe/Moscow').add(1, 'day');
   while (day.day() === 0 || day.day() === 6) {
-    day.add(1, 'day');
+    day = day.add(1, 'day');
   }
   return day;
 }
