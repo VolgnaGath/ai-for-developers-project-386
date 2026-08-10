@@ -5,13 +5,11 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        { "type": "json", "path": "frontend/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "backend/package.json", "jsonpath": "$.version" }
+      ]
     }
-  },
-  "plugins": [
-    {
-      "type": "node-workspace",
-      "updateAllPackages": true
-    }
-  ]
+  }
 }
