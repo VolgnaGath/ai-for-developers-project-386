@@ -12,6 +12,7 @@ export interface ServerConfig {
   host: string;
   port: number;
   frontendOrigin: string;
+  frontendDist?: string;
 }
 
 export function readServerConfig(env: NodeJS.ProcessEnv): ServerConfig {
@@ -24,6 +25,7 @@ export function readServerConfig(env: NodeJS.ProcessEnv): ServerConfig {
     host: env.HOST ?? DEFAULT_HOST,
     port,
     frontendOrigin: env.FRONTEND_ORIGIN ?? DEFAULT_FRONTEND_ORIGIN,
+    frontendDist: env.FRONTEND_DIST,
   };
 }
 
@@ -32,6 +34,7 @@ export function createHttpServer(config: ServerConfig): Server {
     store: createStore({ clock: systemClock, ids: createIdGenerator() }),
     clock: systemClock,
     frontendOrigin: config.frontendOrigin,
+    frontendDist: config.frontendDist,
   });
   return createServer(app);
 }
