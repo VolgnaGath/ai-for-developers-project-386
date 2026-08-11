@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/VolgnaGath/ai-for-developers-project-386/compare/call-calendar-v0.2.0...call-calendar-v0.3.0) (2026-08-11)
+
+
+### Features
+
+* add admin panel link to public header ([#10](https://github.com/VolgnaGath/ai-for-developers-project-386/issues/10)) ([51bb2d9](https://github.com/VolgnaGath/ai-for-developers-project-386/commit/51bb2d95d803674218869d89772257fe7cdeb854))
+
 ## [0.2.0](https://github.com/VolgnaGath/ai-for-developers-project-386/compare/call-calendar-v0.1.1...call-calendar-v0.2.0) (2026-08-10)
 
 
