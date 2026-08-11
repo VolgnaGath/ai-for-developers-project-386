@@ -86,6 +86,16 @@ test.describe('Административный CRUD типов событий',
 });
 
 test.describe('Административный список встреч', () => {
+  test('переходит в админку из шапки публичной страницы', async ({ page }) => {
+    await page.goto('/');
+    const adminLink = page.getByRole('link', { name: 'Панель управления' });
+    await expect(adminLink).toBeVisible();
+
+    await adminLink.click();
+    await expect(page).toHaveURL(/\/admin\/bookings$/);
+    await expect(page.getByRole('heading', { name: 'Предстоящие встречи' })).toBeVisible();
+  });
+
   test('показывает предстоящие встречи', async ({ page }) => {
     await page.goto('/admin/bookings');
     await expect(page.getByRole('heading', { name: 'Предстоящие встречи' })).toBeVisible();
