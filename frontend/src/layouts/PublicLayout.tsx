@@ -12,8 +12,8 @@ export default function PublicLayout() {
       <header className={styles.header}>
         <Container size={1120} className={styles.headerInner}>
           <Brand />
-          <Button component={Link} to="/book" variant="light" size="sm">
-            Забронировать звонок
+          <Button component={Link} to="/admin" variant="light" size="sm">
+            Панель управления
           </Button>
         </Container>
       </header>

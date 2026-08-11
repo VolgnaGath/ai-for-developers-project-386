@@ -23,7 +23,7 @@ test.describe('Гостевое бронирование', () => {
       page.getByRole('heading', { name: 'Планируйте звонки без переписки' }),
     ).toBeVisible();
 
-    await page.getByRole('link', { name: 'Забронировать звонок' }).first().click();
+    await page.getByRole('link', { name: 'Забронировать звонок' }).click();
     await expect(page).toHaveURL(/\/book$/);
     await expect(page.getByRole('heading', { name: 'Выберите тип события' })).toBeVisible();
     await expect(page.getByRole('link', { name: CONSULTATION_CARD })).toBeVisible();
