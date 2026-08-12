@@ -227,35 +227,34 @@ export default function BookingPage() {
           </Alert>
         </Card>
       ) : (
-        <Grid gutter="xl">
-          <Grid.Col span={{ base: 12, lg: 4 }}>
-            {eventType ? (
-              <div>
-                <Anchor component={Link} to="/book" size="sm">
-                  &#8592; Все типы событий
-                </Anchor>
-                <Title order={1} mt="md">
-                  {eventType.title}
-                </Title>
-                {eventType.description ? (
-                  <Text c="dimmed" mt="sm">
-                    {eventType.description}
-                  </Text>
-                ) : null}
-                <Badge variant="light" color="orange" mt="md">
-                  {eventType.durationMinutes} минут
-                </Badge>
-              </div>
-            ) : (
-              <Stack gap="sm">
-                <Skeleton height={24} width="60%" />
-                <Skeleton height={16} width="90%" />
-                <Skeleton height={16} width="70%" />
-              </Stack>
-            )}
-          </Grid.Col>
+        <div>
+          {eventType ? (
+            <div>
+              <Anchor component={Link} to="/book" size="sm">
+                &#8592; Все типы событий
+              </Anchor>
+              <Title order={1} mt="md">
+                {eventType.title}
+              </Title>
+              {eventType.description ? (
+                <Text c="dimmed" mt="sm">
+                  {eventType.description}
+                </Text>
+              ) : null}
+              <Badge variant="light" color="orange" mt="md">
+                {eventType.durationMinutes} минут
+              </Badge>
+            </div>
+          ) : (
+            <Stack gap="sm" mb="xl">
+              <Skeleton height={24} width="60%" />
+              <Skeleton height={16} width="90%" />
+              <Skeleton height={16} width="70%" />
+            </Stack>
+          )}
 
-          <Grid.Col span={{ base: 12, lg: 4 }}>
+        <Grid gutter="xl" mt="xl">
+          <Grid.Col span={{ base: 12, lg: 5 }}>
             <Card className={styles.columnCard}>
               {config ? (
                 <CalendarPicker
@@ -274,7 +273,7 @@ export default function BookingPage() {
             </Card>
           </Grid.Col>
 
-          <Grid.Col span={{ base: 12, lg: 4 }}>
+          <Grid.Col span={{ base: 12, lg: 7 }}>
             <Card className={styles.columnCard}>
               <Text fw={600} mb={4}>
                 {selectedSlot ? 'Ваш выбор' : 'Свободные слоты'}
@@ -314,6 +313,7 @@ export default function BookingPage() {
             </Card>
           </Grid.Col>
         </Grid>
+        </div>
       )}
     </Container>
   );
